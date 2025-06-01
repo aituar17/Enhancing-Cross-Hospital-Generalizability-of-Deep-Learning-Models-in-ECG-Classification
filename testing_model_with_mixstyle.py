@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import pandas as pd
 from torch.utils.data import DataLoader
-from .models.resnet_crossdomain import resnet18  # Updated model with MixStyle
+from .models.resnet_crossdomain import resnet18  
 from ..dataloader.crossdomain_dataset import ECGDataset, get_transforms
 from .metrics import cal_multilabel_metrics, roc_curves
 import pickle
@@ -16,7 +16,6 @@ class Predicting(object):
     
     def setup(self):
         ''' Initialize the device conditions and dataloader, loading trained model '''
-        # Determine the device (GPU or CPU)
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
             self.device_count = self.args.device_count
@@ -26,11 +25,10 @@ class Predicting(object):
             self.device_count = 1
             self.args.logger.info('using 1 cpu')
 
-        # Find test files based on the test CSV (for naming saved predictions)
         filenames = pd.read_csv(self.args.test_path, usecols=['path']).values.tolist()
         self.filenames = [f for file in filenames for f in file]
 
-        # Load the test data
+        #load the test data
         testing_set = ECGDataset(self.args.test_path, get_transforms('test'))
         channels = testing_set.channels
         self.test_dl = DataLoader(
@@ -41,11 +39,11 @@ class Predicting(object):
             drop_last=False
         )
 
-        # Load the trained model
+        #load the trained model
         self.model = resnet18(in_channel=channels, out_channel=len(self.args.labels))
         self.model.load_state_dict(torch.load(self.args.model_path, map_location=self.device))
 
-        # Set the model to evaluation mode and deactivate MixStyle if present
+        #set the model to evaluation mode and deactivate MixStyle if present
         self.model.eval()
         if hasattr(self.model, 'mixstyle'):
             self.model.mixstyle.deactivate()
@@ -58,7 +56,7 @@ class Predicting(object):
         ''' Make predictions '''
         self.args.logger.info(f'predict() called: model={type(self.model).__name__}, device={self.device}')
 
-        # Initialize history
+        #initialize history
         history = {
             'test_micro_avg_prec': 0.0,
             'test_micro_auroc': 0.0,
@@ -72,15 +70,15 @@ class Predicting(object):
 
         start_time_sec = time.time()
 
-        # --- Evaluate on Testing Set ---
+        # --- evaluate on Testing Set ---
         self.model.eval()  # Ensure MixStyle remains deactivated
         labels_all = torch.tensor([], device=self.device)
         logits_prob_all = torch.tensor([], device=self.device)
 
-        for i, (ecgs, ag, labels, domains) in enumerate(self.test_dl):  # Include domains in the dataset
-            ecgs = ecgs.to(self.device)  # ECG data
-            ag = ag.to(self.device)      # Age and gender metadata
-            labels = labels.to(self.device)  # Diagnoses in SNOMED CT codes 
+        for i, (ecgs, ag, labels, domains) in enumerate(self.test_dl):  #include domains in the dataset
+            ecgs = ecgs.to(self.device)  #ECG data
+            ag = ag.to(self.device)      #age and gender metadata
+            labels = labels.to(self.device)  #diagnoses in SNOMED CT codes 
             domains.to(self.device)
 
             with torch.no_grad():
@@ -92,7 +90,7 @@ class Predicting(object):
             if i % 1000 == 0:
                 self.args.logger.info(f'{i + 1}/{len(self.test_dl)} predictions made')
 
-        # Calculate metrics
+        # alculate metrics
         test_metrics = cal_multilabel_metrics(labels_all, logits_prob_all, self.args.labels, self.args.threshold)
         test_macro_avg_prec, test_micro_avg_prec, test_macro_auroc, test_micro_auroc, test_challenge_metric = test_metrics
 
@@ -102,10 +100,10 @@ class Predicting(object):
             f'challenge metric: {test_challenge_metric:.2f}'
         )
 
-        # Draw ROC curve for predictions
+        #draw ROC curve for predictions
         roc_curves(labels_all, logits_prob_all, self.args.labels, epoch=None, save_path=self.args.roc_save_dir)
 
-        # Update testing history with metrics
+        #update testing history with metrics
         history.update({
             'test_micro_auroc': test_micro_auroc,
             'test_micro_avg_prec': test_micro_avg_prec,
@@ -114,12 +112,12 @@ class Predicting(object):
             'test_challenge_metric': test_challenge_metric
         })
 
-        # Save the history
+        #save the history
         history_savepath = os.path.join(self.args.output_dir, f"{self.args.yaml_file_name}_test_history.pickle")
         with open(history_savepath, mode='wb') as file:
             pickle.dump(history, file, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # Save labels and logits
+        #save labels and logits
         filenames = [os.path.basename(file) for file in self.filenames]
         logits_csv_path = os.path.join(self.args.output_dir, f"{self.args.yaml_file_name}_test_logits.csv")
         labels_csv_path = os.path.join(self.args.output_dir, f"{self.args.yaml_file_name}_test_labels.csv")

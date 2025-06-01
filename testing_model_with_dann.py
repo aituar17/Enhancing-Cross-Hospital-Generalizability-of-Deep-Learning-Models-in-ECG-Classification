@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import pandas as pd
 from torch.utils.data import DataLoader
-from .models.resnet_dann import seresnet18_dann, ResNetDANN, BasicBlock  #updated import
+from .models.resnet_dann import seresnet18_dann, ResNetDANN, BasicBlock  
 from ..dataloader.dann_dataset import ECGDataset, get_transforms
 from .metrics import cal_multilabel_metrics, roc_curves
 import pickle
@@ -18,7 +18,6 @@ class Predicting(object):
         ''' Initializing the device conditions and dataloader,
         loading trained model
         '''
-        #consider the GPU or CPU condition
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
             self.device_count = self.args.device_count
@@ -28,7 +27,6 @@ class Predicting(object):
             self.device_count = 1
             self.args.logger.info('using {} cpu'.format(self.device_count))
         
-        #find test files based on the test csv (for naming saved predictions)
         filenames = pd.read_csv(self.args.test_path, usecols = ['path']).values.tolist()
         self.filenames = [f for file in filenames for f in file]
 
@@ -83,7 +81,7 @@ class Predicting(object):
             labels = labels.to(self.device) #diagnoses in SMONED CT codes 
 
             with torch.set_grad_enabled(False):  
-                class_output, domain_output = self.model(ecgs, ag, alpha = 0.0)  #no domain adaptation during prediction
+                class_output, domain_output = self.model(ecgs, ag, alpha = 0.0)  #no domain generalization during prediction
                 logits_prob = self.sigmoid(class_output)
                 labels_all = torch.cat((labels_all, labels), 0)
                 logits_prob_all = torch.cat((logits_prob_all, logits_prob), 0)

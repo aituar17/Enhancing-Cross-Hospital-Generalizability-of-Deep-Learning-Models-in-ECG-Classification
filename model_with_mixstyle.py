@@ -3,13 +3,7 @@ import torch
 from torch.autograd import Function
 
 class MixStyle(nn.Module):
-    """MixStyle module for domain generalization (Cross-Domain version)."""
     def __init__(self, p=0.5, alpha=0.1):
-        """
-        Args:
-            p (float): Probability of applying MixStyle.
-            alpha (float): Beta distribution parameter for sampling mix ratios.
-        """
         super(MixStyle, self).__init__()
         self.p = p
         self.alpha = alpha
@@ -19,18 +13,18 @@ class MixStyle(nn.Module):
         if not self.training or not self._activated or torch.rand(1).item() > self.p:
             return x
 
-        # Compute mean and standard deviation
+        #compute mean and standard deviation
         batch_size, channels, _ = x.size()
         mu = x.mean(dim=2, keepdim=True)
         sigma = x.std(dim=2, keepdim=True)
 
-        # Normalize the input
+        #normalize the input
         x_normed = (x - mu) / (sigma + 1e-6)
 
-        # Shuffle statistics across different domains
+        #shuffle statistics across different domains
         perm = torch.arange(batch_size)
         for i in range(batch_size):
-            # Find a different domain for shuffling
+            #find a different domain for shuffling
             different_domain = (domain_labels != domain_labels[i])
             if different_domain.any():
                 perm[i] = different_domain.nonzero(as_tuple=True)[0].tolist()[0]
@@ -38,10 +32,10 @@ class MixStyle(nn.Module):
         mu_mix = mu[perm]
         sigma_mix = sigma[perm]
 
-        # Sample mixing coefficients
+        #sample mixing coefficients
         lam = torch.distributions.Beta(self.alpha, self.alpha).sample((batch_size, 1, 1)).to(x.device)
 
-        # Mix statistics and reconstruct features
+        #mix statistics and reconstruct features
         mu_mixed = lam * mu + (1 - lam) * mu_mix
         sigma_mixed = lam * sigma + (1 - lam) * sigma_mix
         x_mixed = x_normed * sigma_mixed + mu_mixed
@@ -84,7 +78,7 @@ class SELayer(nn.Module):
         return x * y.expand_as(x)
 
 class BasicBlock(nn.Module):
-    expansion = 1  # Add this attribute
+    expansion = 1  #add this attribute
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, mixstyle=None):
         super(BasicBlock, self).__init__()
@@ -105,7 +99,7 @@ class BasicBlock(nn.Module):
         out = self.bn1(out)
         out = self.relu(out)
 
-        # Apply MixStyle if defined
+        #apply MixStyle if defined
         if self.mixstyle is not None:
             out = self.mixstyle(out, domain_labels)
 
@@ -137,7 +131,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, mixstyle=False)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, mixstyle=False)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
-        self.fc1 = nn.Linear(3, 10)  # Age and gender layer
+        self.fc1 = nn.Linear(3, 10)  #age and gender layer
         self.fc = nn.Linear(512 * block.expansion + 10, out_channel)
 
         for m in self.modules():
@@ -166,12 +160,12 @@ class ResNet(nn.Module):
         for _ in range(1, blocks):
             layers.append(block(self.inplanes, planes, mixstyle=self.mixstyle if mixstyle else None))
 
-        # Use nn.ModuleList to retain the domain_labels input across blocks
+        #use nn.ModuleList to retain the domain_labels input across blocks
         return nn.ModuleList(layers)
 
     def forward_layer(self, x, layers, domain_labels=None):
         for layer in layers:
-            x = layer(x, domain_labels)  # Forward with domain_labels
+            x = layer(x, domain_labels)  #forward with domain_labels
         return x
 
     def forward(self, x, ag, domain_labels=None):

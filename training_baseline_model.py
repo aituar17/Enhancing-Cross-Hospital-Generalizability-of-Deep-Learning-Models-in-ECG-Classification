@@ -20,7 +20,7 @@ class Training(object):
         model, loss, criterion and optimizer
         '''
         
-        # Consider the GPU or CPU condition
+        #consider the GPU or CPU condition
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
             self.device_count = self.args.device_count
@@ -31,7 +31,7 @@ class Training(object):
             self.device_count = 1
             self.args.logger.info('using {} cpu'.format(self.device_count))
 
-        # Load the datasets       
+        #load the datasets       
         training_set = ECGDataset(self.args.train_path, get_transforms('train'))
         channels = training_set.channels
         self.train_dl = DataLoader(training_set,
@@ -55,18 +55,18 @@ class Training(object):
         self.model = resnet18(in_channel=channels, 
                               out_channel=len(self.args.labels))
 
-        # Load model if necessary
+        #load model if necessary
         if hasattr(self.args, 'load_model_path'):
             self.model.load_state_dict(torch.load(self.args.load_model_path))
             self.args.logger.info('Loaded the model from: {}'.format(self.args.load_model_path))
         else:
             self.args.logger.info('Training a new model from the beginning.')
         
-        # If more than 1 CUDA device used, use data parallelism
+        #if more than 1 CUDA device used, use data parallelism
         if self.device_count > 1:
             self.model = torch.nn.DataParallel(self.model) 
         
-        # Optimizer
+        #optimizer
         self.optimizer = optim.Adam(self.model.parameters(), 
                                     lr=self.args.lr,
                                     weight_decay=self.args.weight_decay)
@@ -87,7 +87,7 @@ class Training(object):
                 self.args.epochs, 
                 self.device))
         
-        # Add all wanted history information
+        #add all wanted history information
         history = {}
         history['train_csv'] = self.args.train_path
         history['train_loss'] = []
@@ -127,9 +127,9 @@ class Training(object):
             step = 0
             
             for batch_idx, (ecgs, ag, labels) in enumerate(self.train_dl):
-                ecgs = ecgs.to(self.device)  # ECGs
-                ag = ag.to(self.device)  # age and gender
-                labels = labels.to(self.device)  # diagnoses in SNOMED CT codes  
+                ecgs = ecgs.to(self.device)  #ECGs
+                ag = ag.to(self.device)  #age and gender
+                labels = labels.to(self.device)  #diagnoses in SNOMED CT codes  
                
                 with torch.set_grad_enabled(True):                    
         
@@ -146,7 +146,7 @@ class Training(object):
                     loss.backward()
                     self.optimizer.step()
                     
-                    # Printing training information
+                    #printing training information
                     if step % 100 == 0:
                         batch_loss += loss_tmp
                         batch_count += ecgs.size(0)
@@ -176,7 +176,7 @@ class Training(object):
                 train_macro_auroc,
                 train_macro_avg_prec))
 
-            # Add information for training history
+            #add information for training history
             history['train_loss'].append(train_loss)
             history['train_micro_auroc'].append(train_micro_auroc)
             history['train_micro_avg_prec'].append(train_micro_avg_prec)
@@ -192,9 +192,9 @@ class Training(object):
                 logits_prob_all = torch.tensor((), device=self.device)  
             
                 for ecgs, ag, labels in self.val_dl:
-                    ecgs = ecgs.to(self.device)  # ECGs
-                    ag = ag.to(self.device)  # age and gender
-                    labels = labels.to(self.device)  # diagnoses in SNOMED CT codes 
+                    ecgs = ecgs.to(self.device)  #ECGs
+                    ag = ag.to(self.device)  #age and gender
+                    labels = labels.to(self.device)  #diagnoses in SNOMED CT codes 
                     
                     with torch.set_grad_enabled(False):  
                         
@@ -225,50 +225,46 @@ class Training(object):
 
             # --------------------------------------------------------------------
 
-            # Create ROC Curves at the beginning, middle and end of training
+            #create ROC Curves at the beginning, middle and end of training
             if epoch == 1 or epoch == self.args.epochs/2 or epoch == self.args.epochs:
                 roc_curves(labels_all, logits_prob_all, self.args.labels, epoch, self.args.roc_save_dir)
 
-            # Save a model at every 5th epoch (backup)
+            #save a model at every 5th epoch (backup)
             if epoch in list(range(self.args.epochs)[0::5]):
                 self.args.logger.info('Saved model at the epoch {}!'.format(epoch))
-                # Whether or not you use data parallelism, save the state dictionary this way
-                # to have the flexibility to load the model any way you want to any device you want
                 model_state_dict = self.model.module.state_dict() if self.device_count > 1 else self.model.state_dict()
                     
-                # -- Save model
+                # -- save model
                 model_savepath = os.path.join(self.args.model_save_dir,
                                               self.args.yaml_file_name + '_e' + str(epoch) + '.pth')
                 torch.save(model_state_dict, model_savepath)
 
-            # Save trained model (.pth), history (.pickle) and validation logits (.csv) after the last epoch
+            #save trained model (.pth), history (.pickle) and validation logits (.csv) after the last epoch
             if epoch == self.args.epochs:
                 
                 self.args.logger.info('Saving the model, training history and validation logits...')
                     
-                # Whether or not you use data parallelism, save the state dictionary this way
-                # to have the flexibility to load the model any way you want to any device you want
                 model_state_dict = self.model.module.state_dict() if self.device_count > 1 else self.model.state_dict()
                     
-                # -- Save model
+                # -- save model
                 model_savepath = os.path.join(self.args.model_save_dir,
                                               self.args.yaml_file_name  + '.pth')
                 torch.save(model_state_dict, model_savepath)
                 
-                # -- Save history
+                # -- save history
                 history_savepath = os.path.join(self.args.model_save_dir,
                                                 self.args.yaml_file_name + '_train_history.pickle')
                 with open(history_savepath, mode='wb') as file:
                     pickle.dump(history, file, protocol=pickle.HIGHEST_PROTOCOL)
                     
-                # -- Save the logits from validation if used, either save the logits from the training phase
+                # -- save the logits from validation if used, either save the logits from the training phase
                 if self.args.val_path is not None:
                     self.args.logger.info('- Validation logits saved')
                     logits_csv_path = os.path.join(self.args.model_save_dir,
                                                self.args.yaml_file_name + '_val_logits.csv') 
                     labels_all_csv_path = os.path.join(self.args.model_save_dir,
                                                 self.args.yaml_file_name + '_val_labels.csv') 
-                    # Use filenames as indeces
+                    #use filenames as indeces
                     filenames = [os.path.basename(file) for file in self.validation_files]
 
                 else:
@@ -279,7 +275,7 @@ class Training(object):
                                                 self.args.yaml_file_name + '_train_labels.csv') 
                     filenames = None
                 
-                # Save logits and corresponding labels
+                #save logits and corresponding labels
                 labels_numpy = labels_all.cpu().detach().numpy().astype(np.float32)
                 labels_df = pd.DataFrame(labels_numpy, columns=self.args.labels, index=filenames)
                 labels_df.to_csv(labels_all_csv_path, sep=',')

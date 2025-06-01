@@ -1,0 +1,1 @@
+This repository contains codes for three models: baseline SE-ResNet, SE-ResNet with DANN for domain generalization, and SE-ResNet with MixStyle for domain generalization. All of these codes are in the context of ECG classification.

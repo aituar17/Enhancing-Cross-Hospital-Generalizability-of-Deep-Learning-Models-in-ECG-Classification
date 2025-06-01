@@ -18,7 +18,7 @@ class Predicting(object):
         ''' Initializing the device conditions and dataloader,
         loading trained model
         '''
-        # Consider the GPU or CPU condition
+        #consider the GPU or CPU condition
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
             self.device_count = self.args.device_count
@@ -28,12 +28,10 @@ class Predicting(object):
             self.device_count = 1
             self.args.logger.info('using {} cpu'.format(self.device_count))
         
-        # Find test files based on the test csv (for naming saved predictions)
-        # The paths for these files are in the 'path' column
         filenames = pd.read_csv(self.args.test_path, usecols=['path']).values.tolist()
         self.filenames = [f for file in filenames for f in file]
 
-        # Load the test data
+        #load the test data
         testing_set = ECGDataset(self.args.test_path, 
                                  get_transforms('test'))
         channels = testing_set.channels
@@ -43,7 +41,7 @@ class Predicting(object):
                                   pin_memory=(True if self.device == 'cuda' else False),
                                   drop_last=True)
         
-        # Load the trained model
+        #load the trained model
         self.model = resnet18(in_channel=channels,
                          out_channel=len(self.args.labels))
         self.model.load_state_dict(torch.load(self.args.model_path, map_location=self.device))
@@ -59,7 +57,7 @@ class Predicting(object):
               type(self.model).__name__,
               self.device))
 
-        # Saving the history
+        #saving the history
         history = {}
         history['test_micro_avg_prec'] = 0.0
         history['test_micro_auroc'] = 0.0
@@ -79,9 +77,9 @@ class Predicting(object):
         logits_prob_all = torch.tensor((), device=self.device)  
         
         for i, (ecgs, ag, labels) in enumerate(self.test_dl):
-            ecgs = ecgs.to(self.device) # ECGs
-            ag = ag.to(self.device) # age and gender
-            labels = labels.to(self.device) # diagnoses in SMONED CT codes 
+            ecgs = ecgs.to(self.device) #ECGs
+            ag = ag.to(self.device) #age and gender
+            labels = labels.to(self.device) #diagnoses in SMONED CT codes 
 
             with torch.set_grad_enabled(False):  
                 
@@ -93,7 +91,7 @@ class Predicting(object):
             if i % 1000 == 0:
                 self.args.logger.info('{:<4}/{:>4} predictions made'.format(i+1, len(self.test_dl)))
 
-        # Predicting metrics
+        #predicting metrics
         test_macro_avg_prec, test_micro_avg_prec, test_macro_auroc, test_micro_auroc, test_challenge_metric = cal_multilabel_metrics(labels_all, logits_prob_all, self.args.labels, self.args.threshold)
         
         self.args.logger.info('macro avg prec: {:<6.2f} micro avg prec: {:<6.2f} macro auroc: {:<6.2f} micro auroc: {:<6.2f} challenge metric: {:<6.2f}'.format(
@@ -103,23 +101,23 @@ class Predicting(object):
             test_micro_auroc,
             test_challenge_metric))
         
-        # Draw ROC curve for predictions
+        #draw ROC curve for predictions
         roc_curves(labels_all, logits_prob_all, self.args.labels, epoch=None, save_path=self.args.roc_save_dir)
         
-        # Add information to testing history
+        #add information to testing history
         history['test_micro_auroc'] = test_micro_auroc
         history['test_micro_avg_prec'] = test_micro_avg_prec
         history['test_macro_auroc'] = test_macro_auroc
         history['test_macro_avg_prec'] = test_macro_avg_prec
         history['test_challenge_metric'] = test_challenge_metric
         
-        # Save the history
+        #save the history
         history_savepath = os.path.join(self.args.output_dir,
                                         self.args.yaml_file_name + '_test_history.pickle')
         with open(history_savepath, mode='wb') as file:
             pickle.dump(history, file, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # Save the labels and logits
+        #save the labels and logits
         filenames = [os.path.basename(file) for file in self.filenames]
         logits_csv_path = os.path.join(self.args.output_dir,
                                         self.args.yaml_file_name + '_test_logits.csv') 

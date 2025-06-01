@@ -43,7 +43,6 @@ class Predicting(object):
         self.model = resnet18(in_channel=channels, out_channel=len(self.args.labels))
         self.model.load_state_dict(torch.load(self.args.model_path, map_location=self.device))
 
-        #set the model to evaluation mode and deactivate MixStyle if present
         self.model.eval()
         if hasattr(self.model, 'mixstyle'):
             self.model.mixstyle.deactivate()

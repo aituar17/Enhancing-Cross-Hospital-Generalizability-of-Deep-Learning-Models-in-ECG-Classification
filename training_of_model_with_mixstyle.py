@@ -5,8 +5,8 @@ import pandas as pd
 import numpy as np
 from torch import nn, optim
 from torch.utils.data import DataLoader
-from .models.resnet_crossdomain import resnet18  # Import ResNet with MixStyle
-from ..dataloader.crossdomain_dataset import ECGDataset, get_transforms  # Dataset with domain info
+from .models.resnet_crossdomain import resnet18  
+from ..dataloader.crossdomain_dataset import ECGDataset, get_transforms 
 from .metrics import cal_multilabel_metrics, roc_curves
 import pickle
 
@@ -26,7 +26,7 @@ class Training(object):
             self.device_count = 1
             self.args.logger.info(f'using {self.device_count} cpu(s)')
 
-        # Load the datasets
+        #load the datasets
         training_set = ECGDataset(self.args.train_path, get_transforms('train'))
         channels = training_set.channels
         self.train_dl = DataLoader(training_set,
@@ -46,26 +46,26 @@ class Training(object):
                                      pin_memory=(self.device == "cuda"),
                                      drop_last=True)
 
-        # Initialize the model with MixStyle
+        #initialize the model with MixStyle
         self.model = resnet18(
             in_channel=channels,
             out_channel=len(self.args.labels),
-            mixstyle_p=0.5,  # Probability of applying MixStyle
-            mixstyle_alpha=0.1  # Beta distribution parameter for MixStyle
+            mixstyle_p=0.5,  
+            mixstyle_alpha=0.1  #beta distribution parameter for MixStyle
         )
 
-        # Load pretrained model if specified
+        #load pretrained model if specified
         if hasattr(self.args, 'load_model_path'):
             self.model.load_state_dict(torch.load(self.args.load_model_path))
             self.args.logger.info(f'Loaded the model from: {self.args.load_model_path}')
         else:
             self.args.logger.info('Training a new model from the beginning.')
 
-        # Enable data parallelism if multiple GPUs are available
+        #enable data parallelism if multiple GPUs are available
         if self.device_count > 1:
             self.model = nn.DataParallel(self.model)
 
-        # Optimizer and loss function
+        #optimizer and loss function
         self.optimizer = optim.Adam(self.model.parameters(),
                                     lr=self.args.lr,
                                     weight_decay=self.args.weight_decay)
@@ -97,7 +97,7 @@ class Training(object):
         start_time_sec = time.time()
 
         for epoch in range(1, self.args.epochs + 1):
-            # Train phase
+            #train phase
             self.model.train()
             if hasattr(self.model, 'mixstyle'):
                 self.model.mixstyle.activate()
@@ -109,7 +109,7 @@ class Training(object):
                 ecgs, ag, labels, domains = ecgs.to(self.device), ag.to(self.device), labels.to(self.device), domains.to(self.device)
 
                 self.optimizer.zero_grad()
-                logits = self.model(ecgs, ag, domains)  # Pass domain labels
+                logits = self.model(ecgs, ag, domains)  #pass domain labels
                 loss = self.criterion(logits, labels)
                 loss.backward()
                 self.optimizer.step()
@@ -118,7 +118,7 @@ class Training(object):
                 logits_prob_all.append(self.sigmoid(logits).detach())
                 labels_all.append(labels.detach())
 
-            # Aggregate results
+            #aggregate results
             train_loss /= len(self.train_dl.dataset)
             logits_prob_all = torch.cat(logits_prob_all)
             labels_all = torch.cat(labels_all)
@@ -136,7 +136,7 @@ class Training(object):
             history['train_macro_avg_prec'].append(train_macro_avg_prec)
             history['train_challenge_metric'].append(train_challenge_metric)
 
-            # Validation phase
+            #validation phase
             if self.args.val_path:
                 self.model.eval()
                 if hasattr(self.model, 'mixstyle'):
@@ -147,7 +147,7 @@ class Training(object):
 
                 for ecgs, ag, labels, domains in self.val_dl:
                     ecgs, ag, labels = ecgs.to(self.device), ag.to(self.device), labels.to(self.device)
-                    domains = domains.to(self.device)  # Ensure domain labels are also on the correct device
+                    domains = domains.to(self.device)  #ensure domain labels are also on the correct device
 
                     with torch.no_grad():
                         logits = self.model(ecgs, ag, domain_labels=domains)
@@ -174,50 +174,46 @@ class Training(object):
                 
             # --------------------------------------------------------------------
 
-            # Create ROC Curves at the beginning, middle and end of training
+            #create ROC Curves at the beginning, middle and end of training
             if epoch == 1 or epoch == self.args.epochs/2 or epoch == self.args.epochs:
                 roc_curves(labels_all, logits_prob_all, self.args.labels, epoch, self.args.roc_save_dir)
 
-            # Save a model at every 5th epoch (backup)
+            #save a model at every 5th epoch (backup)
             if epoch in list(range(self.args.epochs)[0::5]):
                 self.args.logger.info('Saved model at the epoch {}!'.format(epoch))
-                # Whether or not you use data parallelism, save the state dictionary this way
-                # to have the flexibility to load the model any way you want to any device you want
                 model_state_dict = self.model.module.state_dict() if self.device_count > 1 else self.model.state_dict()
                     
-                # -- Save model
+                # -- save model
                 model_savepath = os.path.join(self.args.model_save_dir,
                                               self.args.yaml_file_name + '_e' + str(epoch) + '.pth')
                 torch.save(model_state_dict, model_savepath)
 
-            # Save trained model (.pth), history (.pickle) and validation logits (.csv) after the last epoch
+            #save trained model (.pth), history (.pickle) and validation logits (.csv) after the last epoch
             if epoch == self.args.epochs:
                 
                 self.args.logger.info('Saving the model, training history and validation logits...')
                     
-                # Whether or not you use data parallelism, save the state dictionary this way
-                # to have the flexibility to load the model any way you want to any device you want
                 model_state_dict = self.model.module.state_dict() if self.device_count > 1 else self.model.state_dict()
                     
-                # -- Save model
+                # -- save model
                 model_savepath = os.path.join(self.args.model_save_dir,
                                               self.args.yaml_file_name  + '.pth')
                 torch.save(model_state_dict, model_savepath)
                 
-                # -- Save history
+                # -- save history
                 history_savepath = os.path.join(self.args.model_save_dir,
                                                 self.args.yaml_file_name + '_train_history.pickle')
                 with open(history_savepath, mode='wb') as file:
                     pickle.dump(history, file, protocol=pickle.HIGHEST_PROTOCOL)
                     
-                # -- Save the logits from validation if used, either save the logits from the training phase
+                # -- save the logits from validation if used, either save the logits from the training phase
                 if self.args.val_path is not None:
                     self.args.logger.info('- Validation logits saved')
                     logits_csv_path = os.path.join(self.args.model_save_dir,
                                                self.args.yaml_file_name + '_val_logits.csv') 
                     labels_all_csv_path = os.path.join(self.args.model_save_dir,
                                                 self.args.yaml_file_name + '_val_labels.csv') 
-                    # Use filenames as indeces
+                    #use filenames as indeces
                     filenames = [os.path.basename(file) for file in self.validation_files]
 
                 else:
@@ -228,7 +224,7 @@ class Training(object):
                                                 self.args.yaml_file_name + '_train_labels.csv') 
                     filenames = None
                 
-                # Save logits and corresponding labels
+                #save logits and corresponding labels
                 labels_numpy = labels_all.cpu().detach().numpy().astype(np.float32)
                 labels_df = pd.DataFrame(labels_numpy, columns=self.args.labels, index=filenames)
                 labels_df.to_csv(labels_all_csv_path, sep=',')

@@ -97,7 +97,6 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.fc1 = nn.Linear(3, 10) # AGE AND GENDER LAYER - input size the same with the array size of attributes
         self.fc = nn.Linear(512 * block.expansion + 10, out_channel)
-        #self.sig = nn.Sigmoid() ! DON'T USE HERE CAUSE IMPLEMENTED IN THE TRAINING LOOP IN ./utils/train_utils_clip_ag.py
 
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
@@ -106,9 +105,6 @@ class ResNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-        # Zero-initialize the last BN in each residual branch,
-        # so that the residual branch starts with zeros, and each residual block behaves like an identity.
-        # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
         if zero_init_residual:
             for m in self.modules():
                 if isinstance(m, Bottleneck):
@@ -133,21 +129,21 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, ag):
-        x = self.conv1(x) # Input layer, convolution operation
-        x = self.bn1(x) # Applies Batch Normalization over a 2D or 3D input
-        x = self.relu(x) # Applies the rectified linear unit function element-wise
-        x = self.maxpool(x) # Applies 1D max pooling over an input signal composed of several input planes
+        x = self.conv1(x) 
+        x = self.bn1(x) 
+        x = self.relu(x) 
+        x = self.maxpool(x) 
 
-        x = self.layer1(x) # 2nd convolution layer -> output size 56x56 ()
-        x = self.layer2(x) # 3rd convolution layer -> output size 28x28
-        x = self.layer3(x) # 4th convolution layer -> output size 14x14
-        x = self.layer4(x) # 5th convolution layer -> output size 7x7
+        x = self.layer1(x) 
+        x = self.layer2(x) 
+        x = self.layer3(x) 
+        x = self.layer4(x)
 
-        x = self.avgpool(x) # Applies a 1D adaptive average pooling over an input signal composed of several input planes
+        x = self.avgpool(x) 
         x = x.view(x.size(0), -1)
-        ag = self.fc1(ag)  # Fully connected layer, deep features augmented with age and gender features
+        ag = self.fc1(ag)  
         x = torch.cat((ag, x), dim=1)
-        x = self.fc(x) # Fully connected layers, outputs
+        x = self.fc(x) 
 
         return x
 
